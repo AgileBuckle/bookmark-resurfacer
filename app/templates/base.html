@@ -11,6 +11,14 @@
         <a href="/" class="brand">Bookmark Resurfacer</a>
         <a href="/">Bookmarks</a>
         <a href="/settings">Settings</a>
+        <span class="nav-right">
+            {% if show_login %}
+                <a href="/auth/login" class="nav-login">Login</a>
+            {% elif user %}
+                <span class="nav-user">{{ user.display_name or user.email }}</span>
+                <a href="/auth/logout" class="nav-logout">Logout</a>
+            {% endif %}
+        </span>
     </nav>
     <div class="container">
         {% block content %}{% endblock %}

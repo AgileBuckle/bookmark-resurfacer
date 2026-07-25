@@ -1,5 +1,5 @@
 import random
-import asyncio
+import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -7,7 +7,7 @@ import aiosmtplib
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from app.models import Bookmark
+from app.models import Bookmark, User
 from app.settings_service import get_settings
 
 
@@ -36,8 +36,13 @@ def build_email_body(bookmarks: list[Bookmark], settings: dict) -> str:
     return "".join(lines)
 
 
-async def send_email(db: Session) -> bool:
-    settings = get_settings(db)
+async def send_email_for_user(db: Session, user_id: str) -> bool:
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        print(f"User {user_id} not found — skipping send.")
+        return False
+
+    settings = get_settings(db, user_id)
 
     smtp_host = settings["smtp_host"]
     smtp_port = int(settings["smtp_port"])
@@ -48,14 +53,18 @@ async def send_email(db: Session) -> bool:
     email_to = settings["email_to"]
 
     if not all([smtp_host, email_from, email_to]):
-        print("Email settings incomplete — skipping send.")
         return False
 
     links_per_email = int(settings["links_per_email"])
 
-    bookmarks = db.query(Bookmark).order_by(func.random()).limit(links_per_email).all()
+    bookmarks = (
+        db.query(Bookmark)
+        .filter(Bookmark.user_id == user_id)
+        .order_by(func.random())
+        .limit(links_per_email)
+        .all()
+    )
     if not bookmarks:
-        print("No bookmarks to send.")
         return False
 
     html_body = build_email_body(bookmarks, settings)
@@ -75,8 +84,10 @@ async def send_email(db: Session) -> bool:
             password=smtp_password or None,
             start_tls=smtp_use_tls,
         )
-        print(f"Email sent to {email_to} with {len(bookmarks)} bookmarks.")
+        print(f"Email sent to {email_to} for user {user_id} with {len(bookmarks)} bookmarks.")
+        user.last_email_sent_at = datetime.datetime.utcnow()
+        db.commit()
         return True
     except Exception as e:
-        print(f"Failed to send email: {e}")
+        print(f"Failed to send email for user {user_id}: {e}")
         return False
