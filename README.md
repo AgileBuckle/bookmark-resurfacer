@@ -5,6 +5,8 @@ Stores bookmarks and periodically emails you a random set to revisit.
 ## Quick Start (Docker)
 
 ```bash
+git clone <repo-url> bookmark-resurfacer
+cd bookmark-resurfacer
 docker compose up --build
 ```
 
