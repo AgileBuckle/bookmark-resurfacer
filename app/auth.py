@@ -1,54 +1,68 @@
-import os
+import base64
+import hashlib
+import secrets
+from urllib.parse import urlencode
+
 import httpx
 from fastapi import Depends, HTTPException, Request
-from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.config import config
 from app.database import get_db
 from app.models import User
+from app.security import safe_relative_path
 
-VOID_AUTH_CLIENT_ID = os.getenv("VOID_AUTH_CLIENT_ID", "")
-VOID_AUTH_CLIENT_SECRET = os.getenv("VOID_AUTH_CLIENT_SECRET", "")
-VOID_AUTH_REDIRECT_URI = os.getenv("VOID_AUTH_REDIRECT_URI", "http://localhost:8000/auth/callback")
-VOID_AUTH_DOMAIN = os.getenv("VOID_AUTH_DOMAIN", "https://voidauth.example.com")
-SESSION_SECRET = os.getenv("SESSION_SECRET", "change-me-in-production")
+# HTTP calls to the identity provider must not hang a worker indefinitely.
+OAUTH_TIMEOUT = httpx.Timeout(10.0, connect=5.0)
 
 
 class VoidAuthClient:
     """
-    Void Auth SSO client.
+    Void Auth SSO client (OAuth 2.0 authorization code flow with PKCE).
 
-    Replace the URL templates below with the actual Void Auth endpoints
-    once you have your Void Auth instance configured.
+    Endpoints, relative to VOID_AUTH_DOMAIN:
+    - Authorization: /oauth/authorize
+    - Token:         /oauth/token
+    - User info:     /api/user
 
-    Example flow:
-    - Authorization URL:  VOID_AUTH_DOMAIN + "/oauth/authorize"
-    - Token URL:          VOID_AUTH_DOMAIN + "/oauth/token"
-    - User info URL:      VOID_AUTH_DOMAIN + "/api/user"
+    Security notes:
+    - VOID_AUTH_DOMAIN is required to be https (enforced in app/config.py).
+    - PKCE (S256) is always sent, so an intercepted authorization code cannot
+      be redeemed without the verifier held in the user's session.
+    - TLS verification is left at httpx's default (enabled); do not disable it.
     """
 
-    def __init__(self):
-        self.client_id = VOID_AUTH_CLIENT_ID
-        self.client_secret = VOID_AUTH_CLIENT_SECRET
-        self.redirect_uri = VOID_AUTH_REDIRECT_URI
-        self.domain = VOID_AUTH_DOMAIN
+    def __init__(self) -> None:
+        self.client_id = config.void_auth_client_id
+        self.client_secret = config.void_auth_client_secret
+        self.redirect_uri = config.void_auth_redirect_uri
+        self.domain = config.void_auth_domain
 
     @property
     def is_configured(self) -> bool:
-        return bool(self.client_id and self.client_secret)
+        return config.sso_enabled
 
-    def get_authorization_url(self, state: str) -> str:
-        return (
-            f"{self.domain}/oauth/authorize"
-            f"?client_id={self.client_id}"
-            f"&redirect_uri={self.redirect_uri}"
-            f"&response_type=code"
-            f"&state={state}"
-            f"&scope=openid+profile+email"
-        )
+    @staticmethod
+    def generate_pkce_pair() -> tuple[str, str]:
+        verifier = secrets.token_urlsafe(64)
+        digest = hashlib.sha256(verifier.encode("ascii")).digest()
+        challenge = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+        return verifier, challenge
 
-    async def exchange_code(self, code: str) -> dict | None:
-        async with httpx.AsyncClient() as client:
+    def get_authorization_url(self, state: str, code_challenge: str) -> str:
+        params = {
+            "client_id": self.client_id,
+            "redirect_uri": self.redirect_uri,
+            "response_type": "code",
+            "state": state,
+            "scope": "openid profile email",
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
+        }
+        return f"{self.domain}/oauth/authorize?{urlencode(params)}"
+
+    async def exchange_code(self, code: str, code_verifier: str) -> dict | None:
+        async with httpx.AsyncClient(timeout=OAUTH_TIMEOUT) as client:
             try:
                 resp = await client.post(
                     f"{self.domain}/oauth/token",
@@ -58,16 +72,21 @@ class VoidAuthClient:
                         "redirect_uri": self.redirect_uri,
                         "client_id": self.client_id,
                         "client_secret": self.client_secret,
+                        "code_verifier": code_verifier,
                     },
                     headers={"Accept": "application/json"},
                 )
                 resp.raise_for_status()
-                return resp.json()
-            except Exception:
+                data = resp.json()
+                return data if isinstance(data, dict) else None
+            except Exception as exc:
+                # Never surface provider responses to the client: they can
+                # contain the client secret or token material.
+                print(f"OAuth token exchange failed: {type(exc).__name__}")
                 return None
 
     async def get_user_info(self, access_token: str) -> dict | None:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=OAUTH_TIMEOUT) as client:
             try:
                 resp = await client.get(
                     f"{self.domain}/api/user",
@@ -77,8 +96,10 @@ class VoidAuthClient:
                     },
                 )
                 resp.raise_for_status()
-                return resp.json()
-            except Exception:
+                data = resp.json()
+                return data if isinstance(data, dict) else None
+            except Exception as exc:
+                print(f"OAuth user-info request failed: {type(exc).__name__}")
                 return None
 
 
@@ -86,6 +107,13 @@ void_auth = VoidAuthClient()
 
 SESSION_COOKIE_NAME = "br_session"
 DEFAULT_USER_ID = "default"
+
+
+def is_email_allowed(email: str) -> bool:
+    """Enforce the optional ALLOWED_EMAILS allowlist."""
+    if not config.allowed_emails:
+        return True
+    return (email or "").strip().lower() in config.allowed_emails
 
 
 def _get_or_create_default_user(db: Session) -> User:
@@ -99,10 +127,10 @@ def _get_or_create_default_user(db: Session) -> User:
 
 def _get_user_from_session(request: Request, db: Session) -> User | None:
     session_data = request.session.get("user")
-    if not session_data:
+    if not isinstance(session_data, dict):
         return None
     user_id = session_data.get("id")
-    if not user_id:
+    if not user_id or not isinstance(user_id, str):
         return None
     return db.query(User).filter(User.id == user_id).first()
 
@@ -127,7 +155,11 @@ def require_user_or_redirect(request: Request, db: Session = Depends(get_db)) ->
         return _get_or_create_default_user(db)
     user = _get_user_from_session(request, db)
     if user is None:
-        request.session["post_login_redirect"] = str(request.url)
+        # Store only the relative path: an absolute URL is derived from the
+        # client-supplied Host header and would enable an open redirect.
+        request.session["post_login_redirect"] = safe_relative_path(
+            str(request.url.path) + (f"?{request.url.query}" if request.url.query else "")
+        )
         raise HTTPException(
             status_code=302,
             headers={"Location": "/auth/login"},

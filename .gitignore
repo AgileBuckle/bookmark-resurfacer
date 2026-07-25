@@ -1,6 +1,15 @@
 __pycache__/
 *.pyc
-data/
-.env
 .venv/
 venv/
+
+# Never commit secrets or the database (it holds SMTP credentials in plaintext).
+data/
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.*
+!.env.example
+*.pem
+*.key

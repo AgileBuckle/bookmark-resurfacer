@@ -4,34 +4,61 @@
 
 <div class="card">
     <h2>Email Settings</h2>
+
+    {% if saved %}<div class="notice notice-ok">Settings saved.</div>{% endif %}
+    {% if error %}<div class="notice notice-error">{{ error }}</div>{% endif %}
+
     <form method="post" action="/settings/save">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
         <fieldset>
             <legend>SMTP Server</legend>
             <div class="form-row">
                 <div>
                     <label for="smtp_host">SMTP Host</label>
-                    <input type="text" id="smtp_host" name="smtp_host" value="{{ settings.smtp_host }}" placeholder="smtp.gmail.com">
+                    <input type="text" id="smtp_host" name="smtp_host" value="{{ settings.smtp_host }}"
+                           maxlength="255" placeholder="smtp.gmail.com">
                 </div>
                 <div>
                     <label for="smtp_port">SMTP Port</label>
-                    <input type="number" id="smtp_port" name="smtp_port" value="{{ settings.smtp_port }}">
+                    <input type="number" id="smtp_port" name="smtp_port" value="{{ settings.smtp_port }}"
+                           min="1" max="65535">
                 </div>
             </div>
             <div class="form-row">
                 <div>
                     <label for="smtp_username">Username</label>
-                    <input type="text" id="smtp_username" name="smtp_username" value="{{ settings.smtp_username }}">
+                    <input type="text" id="smtp_username" name="smtp_username"
+                           value="{{ settings.smtp_username }}" maxlength="320" autocomplete="username">
                 </div>
                 <div>
+                    {# The stored password is never sent to the browser. Blank
+                       means "keep the current value". #}
                     <label for="smtp_password">Password</label>
-                    <input type="password" id="smtp_password" name="smtp_password" value="{{ settings.smtp_password }}" placeholder="App password for Gmail">
+                    <input type="password" id="smtp_password" name="smtp_password" value=""
+                           maxlength="1024" autocomplete="new-password"
+                           placeholder="{% if settings.smtp_password_set %}Stored — leave blank to keep{% else %}App password for Gmail{% endif %}">
+                    <small class="hint">
+                        {% if settings.smtp_password_set %}
+                            A password is stored. Leave this blank to keep it.
+                        {% else %}
+                            No password stored yet.
+                        {% endif %}
+                    </small>
                 </div>
             </div>
+            {% if settings.smtp_password_set %}
             <div class="checkbox-row">
-                <input type="checkbox" id="smtp_use_tls" name="smtp_use_tls" value="true" {% if settings.smtp_use_tls == "true" %}checked{% endif %}>
+                <input type="checkbox" id="clear_smtp_password" name="clear_smtp_password" value="true">
+                <label for="clear_smtp_password">Delete the stored password</label>
+            </div>
+            {% endif %}
+            <div class="checkbox-row">
+                <input type="checkbox" id="smtp_use_tls" name="smtp_use_tls" value="true"
+                       {% if settings.smtp_use_tls == "true" %}checked{% endif %}>
                 <label for="smtp_use_tls">Use TLS (STARTTLS)</label>
             </div>
+            <small class="hint">Leaving TLS off sends your SMTP username and password over the network in cleartext.</small>
         </fieldset>
 
         <fieldset>
@@ -39,17 +66,20 @@
             <div class="form-row">
                 <div>
                     <label for="email_from">From Address</label>
-                    <input type="email" id="email_from" name="email_from" value="{{ settings.email_from }}" placeholder="you@gmail.com">
-                    <small style="color:#888;font-size:0.8rem;">Must be the same address you authenticate with above.</small>
+                    <input type="email" id="email_from" name="email_from" value="{{ settings.email_from }}"
+                           maxlength="320" placeholder="you@gmail.com">
+                    <small class="hint">Must be the same address you authenticate with above.</small>
                 </div>
                 <div>
                     <label for="email_to">To Address</label>
-                    <input type="email" id="email_to" name="email_to" value="{{ settings.email_to }}" placeholder="you@gmail.com">
+                    <input type="email" id="email_to" name="email_to" value="{{ settings.email_to }}"
+                           maxlength="320" placeholder="you@gmail.com">
                 </div>
             </div>
             <div>
                 <label for="email_subject">Email Subject</label>
-                <input type="text" id="email_subject" name="email_subject" value="{{ settings.email_subject }}">
+                <input type="text" id="email_subject" name="email_subject"
+                       value="{{ settings.email_subject }}" maxlength="255">
             </div>
         </fieldset>
 
@@ -58,38 +88,25 @@
             <div class="form-row">
                 <div>
                     <label for="links_per_email">Links Per Email</label>
-                    <input type="number" id="links_per_email" name="links_per_email" value="{{ settings.links_per_email }}" min="1" max="50">
+                    <input type="number" id="links_per_email" name="links_per_email"
+                           value="{{ settings.links_per_email }}" min="1" max="50">
                 </div>
                 <div>
                     <label for="schedule_interval_hours">Interval (hours)</label>
-                    <input type="number" id="schedule_interval_hours" name="schedule_interval_hours" value="{{ settings.schedule_interval_hours }}" min="1" step="0.5">
+                    <input type="number" id="schedule_interval_hours" name="schedule_interval_hours"
+                           value="{{ settings.schedule_interval_hours }}" min="1" max="8760" step="1">
                 </div>
             </div>
         </fieldset>
 
         <div class="btn-row">
             <button type="submit">Save Settings</button>
-            <button type="button" onclick="sendTest()" class="btn-secondary">Send Test Email</button>
+            <button type="button" id="send-test" class="btn-secondary"
+                    data-csrf="{{ csrf_token }}">Send Test Email</button>
         </div>
     </form>
 </div>
 
-<script>
-async function sendTest() {
-    const btn = event.target;
-    btn.disabled = true;
-    btn.textContent = "Sending...";
-    try {
-        const res = await fetch("/api/send-test", { method: "POST" });
-        const data = await res.json();
-        alert(data.sent ? "Test email sent!" : (data.error || "Failed to send. Check settings and server logs."));
-    } catch (e) {
-        alert("Error: " + e.message);
-    } finally {
-        btn.disabled = false;
-        btn.textContent = "Send Test Email";
-    }
-}
-</script>
+<script src="/static/settings.js"></script>
 
 {% endblock %}

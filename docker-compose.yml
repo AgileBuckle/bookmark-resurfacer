@@ -1,8 +1,31 @@
 services:
   app:
     build: .
+    # Without env_file the .env documented in the README is silently ignored,
+    # which leaves SESSION_SECRET at its insecure default and disables SSO.
+    env_file:
+      - .env
     ports:
-      - "8000:8000"
+      # Bound to localhost: put a TLS-terminating reverse proxy in front before
+      # exposing this to a network. Change to "8000:8000" only if you
+      # understand that the app will then be reachable from anywhere.
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./data:/app/data
+    # Must match the UID/GID that owns ./data on the host. Set APP_UID/APP_GID
+    # in .env (e.g. APP_UID=$(id -u)) if you hit permission errors.
+    user: "${APP_UID:-10001}:${APP_GID:-10001}"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
+    # Bound resources so a runaway loop cannot take down the host.
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          pids: 256

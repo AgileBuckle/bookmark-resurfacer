@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
     <title>{% block title %}Bookmark Resurfacer{% endblock %}</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -14,9 +15,13 @@
         <span class="nav-right">
             {% if show_login %}
                 <a href="/auth/login" class="nav-login">Login</a>
-            {% elif user %}
+            {% elif user and sso_enabled %}
                 <span class="nav-user">{{ user.display_name or user.email }}</span>
-                <a href="/auth/logout" class="nav-logout">Logout</a>
+                {# Logout is a POST so it cannot be triggered cross-site. #}
+                <form method="post" action="/auth/logout" class="nav-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="nav-logout">Logout</button>
+                </form>
             {% endif %}
         </span>
     </nav>

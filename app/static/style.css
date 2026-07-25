@@ -214,6 +214,31 @@ button:disabled {
 
 /* --- bookmarks --- */
 
+.bookmark-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.bookmark-header h2 {
+    margin-bottom: 0;
+}
+
+.search-wrap {
+    flex: 1;
+    max-width: 300px;
+    min-width: 180px;
+}
+
+.search-input {
+    margin-bottom: 0;
+    padding: 0.45rem 0.75rem;
+    font-size: 0.85rem;
+}
+
 .bookmark-item {
     display: flex;
     justify-content: space-between;
@@ -253,6 +278,25 @@ button:disabled {
     color: #555;
     font-size: 0.85rem;
     margin-top: 0.2rem;
+}
+
+.bookmark-item .actions {
+    display: flex;
+    gap: 0.4rem;
+    flex-shrink: 0;
+}
+
+.bookmark-edit {
+    width: 100%;
+}
+
+.edit-form {
+    width: 100%;
+}
+
+.edit-form input,
+.edit-form textarea {
+    margin-bottom: 0.5rem;
 }
 
 /* --- tags --- */
@@ -298,4 +342,64 @@ button:disabled {
 .btn-row {
     display: flex;
     gap: 0.5rem;
+}
+
+/* --- security-related UI --- */
+
+/* [hidden] must win over the display rules above (CSP-safe show/hide). */
+[hidden] {
+    display: none !important;
+}
+
+/* Logout is a POST form; keep it looking like the old nav link. */
+.nav-form {
+    display: inline;
+    margin: 0;
+}
+
+button.nav-logout {
+    background: transparent;
+    cursor: pointer;
+}
+
+button.nav-logout:hover {
+    background: #333;
+}
+
+.inline-form {
+    display: inline;
+    margin: 0;
+}
+
+/* Bookmark whose URL is not http(s): shown, but not clickable. */
+.unsafe-url {
+    color: #b3261e;
+    font-weight: 600;
+    word-break: break-all;
+    text-decoration: line-through;
+}
+
+.hint {
+    display: block;
+    color: #888;
+    font-size: 0.8rem;
+    margin-bottom: 0.5rem;
+}
+
+.notice {
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.notice-ok {
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+}
+
+.notice-error {
+    background: #fdecea;
+    border: 1px solid #f5c2c0;
+    color: #8a1c13;
 }
