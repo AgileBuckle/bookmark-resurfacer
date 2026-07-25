@@ -17,7 +17,7 @@
                 <div>
                     <label for="smtp_host">SMTP Host</label>
                     <input type="text" id="smtp_host" name="smtp_host" value="{{ settings.smtp_host }}"
-                           maxlength="255" placeholder="smtp.gmail.com">
+                           maxlength="255" placeholder="smtp.email.com">
                 </div>
                 <div>
                     <label for="smtp_port">SMTP Port</label>
@@ -37,7 +37,7 @@
                     <label for="smtp_password">Password</label>
                     <input type="password" id="smtp_password" name="smtp_password" value=""
                            maxlength="1024" autocomplete="new-password"
-                           placeholder="{% if settings.smtp_password_set %}Stored — leave blank to keep{% else %}App password for Gmail{% endif %}">
+                           placeholder="{% if settings.smtp_password_set %}Stored — leave blank to keep{% else %}App password for Email{% endif %}">>
                     <small class="hint">
                         {% if settings.smtp_password_set %}
                             A password is stored. Leave this blank to keep it.
@@ -67,13 +67,13 @@
                 <div>
                     <label for="email_from">From Address</label>
                     <input type="email" id="email_from" name="email_from" value="{{ settings.email_from }}"
-                           maxlength="320" placeholder="you@gmail.com">
+                           maxlength="320" placeholder="you@email.com">>
                     <small class="hint">Must be the same address you authenticate with above.</small>
                 </div>
                 <div>
                     <label for="email_to">To Address</label>
                     <input type="email" id="email_to" name="email_to" value="{{ settings.email_to }}"
-                           maxlength="320" placeholder="you@gmail.com">
+                           maxlength="320" placeholder="you@email.com">>
                 </div>
             </div>
             <div>

@@ -91,10 +91,10 @@ Email settings are per user and managed at `/settings`.
 
 | Field | Example |
 |---|---|
-| SMTP Host | `smtp.gmail.com` |
+| SMTP Host | `smtp.email.com` |
 | SMTP Port | `587` |
 | Username / Password | Your email + app password |
-| From / To Address | `you@gmail.com` |
+| From / To Address | `you@email.com` |
 | Links Per Email | `5` (1–50) |
 | Interval (hours) | `24` (1–8760) |
 
