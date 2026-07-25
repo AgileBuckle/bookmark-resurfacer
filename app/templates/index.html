@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Bookmarks — Bookmark Resurfacer{% endblock %}
+{% block content %}
+
+<div class="card">
+    <h2>Add a Bookmark</h2>
+    <form method="post" action="/bookmarks/add">
+        <div>
+            <label for="url">URL *</label>
+            <input type="url" id="url" name="url" required placeholder="https://example.com">
+        </div>
+        <div>
+            <label for="title">Title</label>
+            <input type="text" id="title" name="title" placeholder="Optional title">
+        </div>
+        <div>
+            <label for="description">Description</label>
+            <textarea id="description" name="description" placeholder="Why is this worth revisiting?"></textarea>
+        </div>
+        <div>
+            <label for="tags">Tags</label>
+            <input type="text" id="tags" name="tags" placeholder="comma, separated, tags">
+        </div>
+        <button type="submit">Save Bookmark</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Your Bookmarks ({{ bookmarks|length }})</h2>
+    {% if bookmarks %}
+        {% for bm in bookmarks %}
+        <div class="bookmark-item">
+            <div class="info">
+                <div>
+                    <a href="{{ bm.url }}" target="_blank" rel="noopener">
+                        {{ bm.title or bm.url }}
+                    </a>
+                </div>
+                {% if bm.description %}<div class="desc">{{ bm.description }}</div>{% endif %}
+                <div class="meta">
+                    Added: {{ bm.created_at.strftime("%Y-%m-%d %H:%M") if bm.created_at else "" }}
+                    {% if bm.tags %}
+                        &nbsp;|&nbsp;
+                        {% for tag in bm.tags.split(",") %}
+                            {% set t = tag.strip() %}
+                            {% if t %}<span class="tag">{{ t }}</span>{% endif %}
+                        {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+            <a href="/bookmarks/{{ bm.id }}/delete" class="btn btn-danger btn-sm" onclick="return confirm('Delete this bookmark?')">Delete</a>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="empty">No bookmarks yet. Add one above!</div>
+    {% endif %}
+</div>
+
+{% endblock %}
