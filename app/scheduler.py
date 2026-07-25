@@ -33,7 +33,9 @@ def _send_email_for_user_job(user_id: str):
 async def _do_send(user_id: str):
     db = SessionLocal()
     try:
-        await send_email_for_user(db, user_id)
+        success, error = await send_email_for_user(db, user_id)
+        if error:
+            print(f"Scheduled email failed for user {user_id}: {error}")
     finally:
         db.close()
 

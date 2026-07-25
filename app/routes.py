@@ -229,5 +229,5 @@ async def api_send_test(
     db: Session = Depends(get_db),
 ):
     from app.email_service import send_email_for_user
-    success = await send_email_for_user(db, user.id)
-    return {"sent": success}
+    success, error = await send_email_for_user(db, user.id)
+    return {"sent": success, "error": error}

@@ -40,6 +40,7 @@
                 <div>
                     <label for="email_from">From Address</label>
                     <input type="email" id="email_from" name="email_from" value="{{ settings.email_from }}" placeholder="you@gmail.com">
+                    <small style="color:#888;font-size:0.8rem;">Must be the same address you authenticate with above.</small>
                 </div>
                 <div>
                     <label for="email_to">To Address</label>
@@ -81,7 +82,7 @@ async function sendTest() {
     try {
         const res = await fetch("/api/send-test", { method: "POST" });
         const data = await res.json();
-        alert(data.sent ? "Test email sent!" : "Failed to send. Check settings and server logs.");
+        alert(data.sent ? "Test email sent!" : (data.error || "Failed to send. Check settings and server logs."));
     } catch (e) {
         alert("Error: " + e.message);
     } finally {

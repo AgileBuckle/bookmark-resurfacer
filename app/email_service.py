@@ -36,11 +36,12 @@ def build_email_body(bookmarks: list[Bookmark], settings: dict) -> str:
     return "".join(lines)
 
 
-async def send_email_for_user(db: Session, user_id: str) -> bool:
+async def send_email_for_user(db: Session, user_id: str) -> tuple[bool, str | None]:
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
-        print(f"User {user_id} not found — skipping send.")
-        return False
+        msg = f"User {user_id} not found."
+        print(f"{msg} — skipping send.")
+        return False, msg
 
     settings = get_settings(db, user_id)
 
@@ -53,7 +54,7 @@ async def send_email_for_user(db: Session, user_id: str) -> bool:
     email_to = settings["email_to"]
 
     if not all([smtp_host, email_from, email_to]):
-        return False
+        return False, "SMTP host, from address, and to address are required."
 
     links_per_email = int(settings["links_per_email"])
 
@@ -65,7 +66,7 @@ async def send_email_for_user(db: Session, user_id: str) -> bool:
         .all()
     )
     if not bookmarks:
-        return False
+        return False, "No bookmarks to send."
 
     html_body = build_email_body(bookmarks, settings)
 
@@ -87,7 +88,6 @@ async def send_email_for_user(db: Session, user_id: str) -> bool:
         print(f"Email sent to {email_to} for user {user_id} with {len(bookmarks)} bookmarks.")
         user.last_email_sent_at = datetime.datetime.utcnow()
         db.commit()
-        return True
+        return True, None
     except Exception as e:
-        print(f"Failed to send email for user {user_id}: {e}")
-        return False
+        return False, str(e)
