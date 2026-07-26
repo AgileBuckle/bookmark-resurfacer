@@ -21,9 +21,9 @@ class VoidAuthClient:
     Void Auth SSO client (OAuth 2.0 authorization code flow with PKCE).
 
     Endpoints, relative to VOID_AUTH_DOMAIN:
-    - Authorization: /oauth/authorize
-    - Token:         /oauth/token
-    - User info:     /api/user
+    - Authorization: /oidc/auth
+    - Token:         /oidc/token
+    - User info:     /oidc/me
 
     Security notes:
     - VOID_AUTH_DOMAIN is required to be https (enforced in app/config.py).
@@ -59,13 +59,13 @@ class VoidAuthClient:
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
         }
-        return f"{self.domain}/oauth/authorize?{urlencode(params)}"
+          return f"{self.domain}/oidc/auth?{urlencode(params)}"
 
     async def exchange_code(self, code: str, code_verifier: str) -> dict | None:
         async with httpx.AsyncClient(timeout=OAUTH_TIMEOUT) as client:
             try:
                 resp = await client.post(
-                    f"{self.domain}/oauth/token",
+                    f"{self.domain}/oidc/token",
                     data={
                         "grant_type": "authorization_code",
                         "code": code,
@@ -89,7 +89,7 @@ class VoidAuthClient:
         async with httpx.AsyncClient(timeout=OAUTH_TIMEOUT) as client:
             try:
                 resp = await client.get(
-                    f"{self.domain}/api/user",
+                    f"{self.domain}/oidc/me",
                     headers={
                         "Authorization": f"Bearer {access_token}",
                         "Accept": "application/json",
