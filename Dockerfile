@@ -33,10 +33,10 @@ USER app
 EXPOSE 8000
 
 # --proxy-headers + --forwarded-allow-ips are required for correct scheme/host
-# detection behind a reverse proxy. Trust only the proxy's address; the default
-# of 127.0.0.1 is correct when the proxy shares the network namespace.
+# detection behind a reverse proxy. Set to the proxy's IP for tighter security;
+# use "*" only if your proxy IP is dynamic or the proxy is on a different host.
 CMD ["uvicorn", "app.main:app", \
      "--host", "0.0.0.0", \
      "--port", "8000", \
      "--proxy-headers", \
-     "--forwarded-allow-ips", "127.0.0.1"]
+     "--forwarded-allow-ips", "*"]
