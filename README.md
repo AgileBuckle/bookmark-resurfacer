@@ -52,6 +52,7 @@ project root (`app/config.py`). Real environment variables override the file.
 | `DATA_DIR` | `./data` | Where `bookmarks.db` lives. |
 | `TEST_EMAIL_LIMIT_PER_HOUR` | `5` | Cap on `/api/send-test` per user. |
 | `LOGIN_LIMIT_PER_HOUR` | `20` | Cap on login attempts per client IP. |
+| `QUICK_ADD_LIMIT_PER_HOUR` | `100` | Cap on `/api/quick-add` (Shortcuts) per API key. |
 
 ### Void Auth SSO
 
@@ -95,8 +96,11 @@ Email settings are per user and managed at `/settings`.
 | SMTP Port | `587` |
 | Username / Password | Your email + app password |
 | From / To Address | `you@email.com` |
+| Subject | `Your Bookmarks to Revisit` |
+| Body Template | HTML with `{subject}` and `{bookmarks_list}` placeholders |
 | Links Per Email | `5` (1–50) |
 | Interval (hours) | `24` (1–8760) |
+| Send Time | Hour (0–23) and minute (0–59) in UTC |
 
 - Use a provider **app password**, not your primary account password
   ([Gmail instructions](https://support.google.com/accounts/answer/185833)).
@@ -104,6 +108,9 @@ Email settings are per user and managed at `/settings`.
   blank keeps the current value; tick *Delete the stored password* to remove it.
 - Leave **Use TLS** enabled. Disabling it sends your SMTP credentials over the
   network in cleartext.
+- The interval is rounded to the nearest day for scheduling (24 h = daily,
+  48 h = every other day, 168 h = weekly). Emails go out at the configured
+  hour and minute.
 
 ## Usage
 
@@ -112,6 +119,70 @@ Email settings are per user and managed at `/settings`.
 3. Go to **/settings** and fill in SMTP details, recipient, links per email and interval.
 4. Use **Send Test Email** to verify.
 5. The scheduler then runs per user on the configured interval.
+
+## Apple Shortcuts
+
+You can submit bookmarks directly from Safari, a share sheet, or any Shortcut
+without opening the web app. The app exposes a `POST /api/quick-add` endpoint
+that authenticates with a per-user API key instead of a session cookie or CSRF
+token.
+
+### 1. Get your API key
+
+Open **Settings** and scroll to **API Access**. The first time, click
+**Generate API Key**. The key appears once — copy it immediately. If you lose
+it, regenerate a new one (the old key stops working).
+
+### 2. Set up the Shortcut
+
+Create a new Shortcut in the **Shortcuts** app:
+
+1. **Add an action** — search for *"Get URLs from Input"* and add it as the
+   **receive input type** (tap "Shortcut Input", select "URL").
+2. **Add a *Text* action** and set the content to:
+
+   ```
+   https://YOUR_SERVER/api/quick-add
+   ```
+
+   Replace `YOUR_SERVER` with your app's address (e.g. `bm.example.com`).
+
+3. **Add a *Get Contents of URL* action** (the `POST` variant):
+   - **Method:** `POST`
+   - **Request Body:** `JSON`
+   - Add a new field `"url"` with type **Text** and value **Shortcut Input**.
+   - Add a new field `"title"` with type **Text** and value
+     **Shortcut Input** (the Shortcuts app auto-extracts page titles).
+   - Add a header `X-API-Key` — paste your API key as the value.
+
+   > **Tip:** To also capture the page title, add a *"Get Name of [Shortcut Input]"*
+   > action before the *Get Contents of URL* action and use that variable
+   > for the `"title"` field.
+
+4. **Name the shortcut** (e.g. "Bookmark This") and **save**.
+
+### 3. Use it
+
+- **From Safari:** tap the Share button → scroll to "Bookmark This".
+- **From the Share Sheet:** share any URL → run the shortcut.
+- **From Siri:** say "Bookmark This" while viewing a page.
+
+The bookmark appears on your `/` page and in the next scheduled email.
+
+### Shortcut JSON format
+
+```json
+{
+  "url": "https://example.com",
+  "title": "Example Page",
+  "description": "Why this is worth revisiting",
+  "tags": "comma, separated, tags"
+}
+```
+
+Only `url` is required. The `title`, `description`, and `tags` fields are
+optional. Bare domains (e.g. `voxelith.art`) are automatically upgraded to
+`https://voxelith.art`.
 
 ## Production
 
@@ -138,7 +209,10 @@ going live.
 ## API
 
 All endpoints require an authenticated session when Void Auth is enabled, and
-**every mutating request requires a CSRF token**.
+**every mutating request requires a CSRF token** (except `/api/quick-add`, which
+uses an API key instead).
+
+**Session-based requests** (web app / curl):
 
 ```bash
 # 1. Get a token for your session
@@ -152,16 +226,27 @@ curl -b jar -X POST http://localhost:8000/api/bookmarks \
      -d '{"url":"https://example.com","title":"Example"}'
 ```
 
-| Method | Endpoint | CSRF | Description |
+**API key requests** (Shortcuts / automation):
+
+```bash
+curl -X POST http://localhost:8000/api/quick-add \
+     -H "Content-Type: application/json" \
+     -H "X-API-Key: br_xxxx-your-api-key-here" \
+     -d '{"url":"https://example.com","title":"Example"}'
+```
+
+| Method | Endpoint | Auth / CSRF | Description |
 |---|---|---|---|
-| `GET` | `/api/csrf-token` | — | Current session's CSRF token |
-| `GET` | `/api/bookmarks?q=&limit=&offset=` | — | List your bookmarks (paginated, max 1000) |
-| `POST` | `/api/bookmarks` | yes | Create a bookmark (`http`/`https` URLs only) |
-| `PUT` | `/api/bookmarks/{id}` | yes | Update a bookmark |
-| `DELETE` | `/api/bookmarks/{id}` | yes | Delete a bookmark |
-| `GET` | `/api/settings` | — | Your settings — returns `smtp_password_set`, never the password |
-| `POST` | `/api/settings` | yes | Update settings (blank `smtp_password` keeps the stored one; `clear_smtp_password: true` deletes it) |
-| `POST` | `/api/send-test` | yes | Send a test email (rate limited) |
+| `GET` | `/api/csrf-token` | session | Current session's CSRF token |
+| `GET` | `/api/bookmarks?q=&limit=&offset=` | session | List your bookmarks (paginated, max 1000) |
+| `POST` | `/api/bookmarks` | session + CSRF | Create a bookmark (`http`/`https` URLs only) |
+| `PUT` | `/api/bookmarks/{id}` | session + CSRF | Update a bookmark |
+| `DELETE` | `/api/bookmarks/{id}` | session + CSRF | Delete a bookmark |
+| `GET` | `/api/settings` | session | Your settings — returns `smtp_password_set`, never the password |
+| `POST` | `/api/settings` | session + CSRF | Update settings (blank `smtp_password` keeps the stored one; `clear_smtp_password: true` deletes it) |
+| `POST` | `/api/send-test` | session + CSRF | Send a test email (rate limited) |
+| `POST` | `/api/quick-add` | `X-API-Key` header | Create a bookmark. Designed for Apple Shortcuts — no session or CSRF needed. (rate limited) |
+| `POST` | `/api/regenerate-api-key` | session + CSRF | Rotate the API key — the old key stops working immediately |
 
 ## Architecture
 
