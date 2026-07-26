@@ -59,7 +59,7 @@ class VoidAuthClient:
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
         }
-          return f"{self.domain}/oidc/auth?{urlencode(params)}"
+        return f"{self.domain}/oidc/auth?{urlencode(params)}"
 
     async def exchange_code(self, code: str, code_verifier: str) -> dict | None:
         async with httpx.AsyncClient(timeout=OAUTH_TIMEOUT) as client:
