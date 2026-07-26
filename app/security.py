@@ -87,6 +87,8 @@ def validate_url(raw: str) -> str:
 
     Blocks `javascript:`, `data:`, `vbscript:` and `file:` URIs, which would
     otherwise be rendered as clickable links in the UI and in outgoing email.
+    Bare domains (e.g. ``voxelith.art``) are automatically upgraded to
+    ``https://voxelith.art``.
     """
     url = _CONTROL_CHARS.sub("", (raw or "").strip())
     if not url:
@@ -96,6 +98,9 @@ def validate_url(raw: str) -> str:
             status_code=422, detail=f"URL exceeds {MAX_URL_LENGTH} characters."
         )
     parsed = urlparse(url)
+    if not parsed.scheme:
+        url = f"https://{url}"
+        parsed = urlparse(url)
     if parsed.scheme.lower() not in ALLOWED_URL_SCHEMES:
         raise HTTPException(
             status_code=422, detail="URL must start with http:// or https://"

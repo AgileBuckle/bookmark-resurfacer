@@ -13,7 +13,6 @@ document.addEventListener("DOMContentLoaded", function () {
     try {
       var res = await fetch("/api/send-test", {
         method: "POST",
-        // State-changing requests must carry the CSRF token.
         headers: { "X-CSRF-Token": btn.dataset.csrf || "" },
         credentials: "same-origin",
       });
@@ -34,4 +33,56 @@ document.addEventListener("DOMContentLoaded", function () {
       btn.textContent = original;
     }
   });
+
+  var copyBtn = document.getElementById("copy-api-key");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", function () {
+      var input = document.getElementById("api_key_display");
+      if (!input) return;
+      navigator.clipboard.writeText(input.value).then(function () {
+        var original = copyBtn.textContent;
+        copyBtn.textContent = "Copied!";
+        setTimeout(function () {
+          copyBtn.textContent = original;
+        }, 2000);
+      });
+    });
+  }
+
+  var regenBtn = document.getElementById("regenerate-api-key");
+  if (regenBtn) {
+    var label = regenBtn.textContent.trim().toLowerCase().indexOf("regenerate") !== -1
+      ? "Regenerate"
+      : "Generate";
+    regenBtn.addEventListener("click", async function () {
+      if (label === "Regenerate" && !window.confirm("Regenerate the API key? The old key will stop working immediately.")) {
+        return;
+      }
+      regenBtn.disabled = true;
+      try {
+        var res = await fetch("/api/regenerate-api-key", {
+          method: "POST",
+          headers: { "X-CSRF-Token": regenBtn.dataset.csrf || "" },
+          credentials: "same-origin",
+        });
+        var data = await res.json().catch(function () {
+          return {};
+        });
+        if (res.ok && data.api_key) {
+          var input = document.getElementById("api_key_display");
+          if (input) input.value = data.api_key;
+          if (copyBtn) copyBtn.hidden = false;
+          regenBtn.textContent = "Regenerate API Key";
+          label = "Regenerate";
+          window.alert("API key generated. Copy it now — it will not be shown again.");
+        } else {
+          window.alert(data.detail || "Failed to generate API key.");
+        }
+      } catch (e) {
+        window.alert("Request failed.");
+      } finally {
+        regenBtn.disabled = false;
+      }
+    });
+  }
 });

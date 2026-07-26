@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.auth import require_user_or_redirect, require_user, void_auth, DEFAULT_USER_ID
 from app.config import config
 from app.database import get_db
-from app.models import Bookmark, User
+from app.models import Bookmark, User, Setting
 from app.schemas import (
     BookmarkCreate,
     BookmarkUpdate,
@@ -30,7 +30,7 @@ from app.security import (
     validate_url,
     verify_csrf,
 )
-from app.settings_service import get_settings_public, save_settings
+from app.settings_service import get_settings_public, save_settings, regenerate_api_key, _hash_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +48,7 @@ jinja_env.cache = None
 # Sending mail is the only endpoint that reaches out to a third party on
 # demand; cap it so a stolen session cannot be used as a mail cannon.
 test_email_limiter = RateLimiter(config.test_email_limit, window_seconds=3600)
+quick_add_limiter = RateLimiter(config.quick_add_limit, window_seconds=3600)
 
 MAX_SEARCH_LENGTH = 200
 
@@ -211,8 +212,11 @@ def save_settings_form(
     email_from: str = Form("", max_length=320),
     email_to: str = Form("", max_length=320),
     email_subject: str = Form("Your Bookmarks to Revisit", max_length=255),
+    email_body_template: str = Form("", max_length=16384),
     links_per_email: int = Form(5),
     schedule_interval_hours: int = Form(24),
+    schedule_hour: int = Form(9),
+    schedule_minute: int = Form(0),
     user: User = Depends(require_user_or_redirect),
     db: Session = Depends(get_db),
 ):
@@ -227,8 +231,11 @@ def save_settings_form(
             email_from=email_from,
             email_to=email_to,
             email_subject=email_subject,
+            email_body_template=email_body_template,
             links_per_email=links_per_email,
             schedule_interval_hours=schedule_interval_hours,
+            schedule_hour=schedule_hour,
+            schedule_minute=schedule_minute,
         )
     except ValidationError:
         return RedirectResponse(
@@ -384,3 +391,57 @@ async def api_send_test(
 
     success, error = await send_email_for_user(db, user.id)
     return {"sent": success, "error": error}
+
+
+@router.post("/api/regenerate-api-key", dependencies=[Depends(verify_csrf)])
+def api_regenerate_api_key(
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    key = regenerate_api_key(db, user.id)
+    return {"api_key": key}
+
+
+def _get_user_by_api_key(db: Session, api_key: str) -> User | None:
+    key_hash = _hash_api_key(api_key)
+    row = (
+        db.query(Setting)
+        .filter(Setting.key == "api_key", Setting.value == key_hash)
+        .first()
+    )
+    if not row:
+        return None
+    return db.query(User).filter(User.id == row.user_id).first()
+
+
+@router.post(
+    "/api/quick-add",
+    response_model=BookmarkOut,
+    status_code=201,
+)
+def api_quick_add(
+    data: BookmarkCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    api_key = request.headers.get("X-API-Key") or ""
+    if not api_key:
+        raise HTTPException(status_code=401, detail="X-API-Key header is required")
+    user = _get_user_by_api_key(db, api_key)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    quick_add_limiter.enforce(
+        f"quick-add:{user.id}",
+        f"Quick-add limit reached ({config.quick_add_limit}/hour). Try again later.",
+    )
+    bookmark = Bookmark(
+        user_id=user.id,
+        url=validate_url(data.url),
+        title=clean_text(data.title, MAX_TITLE_LENGTH),
+        description=clean_text(data.description, MAX_DESCRIPTION_LENGTH),
+        tags=clean_text(data.tags, MAX_TAGS_LENGTH),
+    )
+    db.add(bookmark)
+    db.commit()
+    db.refresh(bookmark)
+    return bookmark

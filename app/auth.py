@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import logging
 import secrets
 from urllib.parse import urlencode
 
@@ -11,6 +12,8 @@ from app.config import config
 from app.database import get_db
 from app.models import User
 from app.security import safe_relative_path
+
+logger = logging.getLogger(__name__)
 
 # HTTP calls to the identity provider must not hang a worker indefinitely.
 OAUTH_TIMEOUT = httpx.Timeout(10.0, connect=5.0)
@@ -82,7 +85,7 @@ class VoidAuthClient:
             except Exception as exc:
                 # Never surface provider responses to the client: they can
                 # contain the client secret or token material.
-                print(f"OAuth token exchange failed: {type(exc).__name__}")
+                logger.warning("OAuth token exchange failed: %s: %s", type(exc).__name__, exc)
                 return None
 
     async def get_user_info(self, access_token: str) -> dict | None:
@@ -99,7 +102,7 @@ class VoidAuthClient:
                 data = resp.json()
                 return data if isinstance(data, dict) else None
             except Exception as exc:
-                print(f"OAuth user-info request failed: {type(exc).__name__}")
+                logger.warning("OAuth user-info request failed: %s: %s", type(exc).__name__, exc)
                 return None
 
 

@@ -1,7 +1,7 @@
 - [ ] add dark mode
-- [ ] make editable email text in settings
+- [ ] make the text sent in the email editable in settings
 - [ ] figure out logo/favicon etc
 - [ ] work on ui
 - [ ] make email send time customizable
 - [ ] make site entry box more robust (if i add something like `voxelith.art` it should autocorrect to `https://voxelith.art`)
-- [ ] make way to submit sites via apple shortcuts
+- [ ] make way to submit sites via apple shortcuts using api or something

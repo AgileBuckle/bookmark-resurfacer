@@ -2,6 +2,7 @@ import logging
 from functools import partial
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 from app.database import SessionLocal
 from app.email_service import send_email_for_user
@@ -13,25 +14,40 @@ logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
 _scheduler_started = False
 
-MIN_INTERVAL_HOURS = 1.0
-MAX_INTERVAL_HOURS = 8760.0
-DEFAULT_INTERVAL_HOURS = 24.0
+MIN_INTERVAL_HOURS = 1
+MAX_INTERVAL_HOURS = 8760
+DEFAULT_INTERVAL_HOURS = 24
+DEFAULT_HOUR = 9
+DEFAULT_MINUTE = 0
 
 
 def _get_job_id(user_id: str) -> str:
     return f"email_job_{user_id}"
 
 
-def _get_interval_hours_for_user(user_id: str) -> float:
+def _get_schedule_for_user(user_id: str) -> tuple[int, int, int]:
     db = SessionLocal()
     try:
         settings = get_settings(db, user_id)
         try:
-            hours = float(settings.get("schedule_interval_hours") or DEFAULT_INTERVAL_HOURS)
+            interval = int(float(settings.get("schedule_interval_hours") or DEFAULT_INTERVAL_HOURS))
         except (ValueError, TypeError):
-            return DEFAULT_INTERVAL_HOURS
-        # Clamp: a tiny interval turns the scheduler into a mail flood.
-        return max(MIN_INTERVAL_HOURS, min(hours, MAX_INTERVAL_HOURS))
+            interval = DEFAULT_INTERVAL_HOURS
+        interval = max(MIN_INTERVAL_HOURS, min(interval, MAX_INTERVAL_HOURS))
+
+        try:
+            hour = int(float(settings.get("schedule_hour") or DEFAULT_HOUR))
+        except (ValueError, TypeError):
+            hour = DEFAULT_HOUR
+        hour = max(0, min(hour, 23))
+
+        try:
+            minute = int(float(settings.get("schedule_minute") or DEFAULT_MINUTE))
+        except (ValueError, TypeError):
+            minute = DEFAULT_MINUTE
+        minute = max(0, min(minute, 59))
+
+        return interval, hour, minute
     finally:
         db.close()
 
@@ -50,18 +66,21 @@ async def _do_send(user_id: str) -> None:
 
 def reschedule_for_user(user_id: str) -> None:
     job_id = _get_job_id(user_id)
-    interval = _get_interval_hours_for_user(user_id)
+    interval_hours, hour, minute = _get_schedule_for_user(user_id)
+
+    interval_days = max(1, round(interval_hours / 24))
+    if interval_days > 1:
+        trigger = CronTrigger(hour=hour, minute=minute, day=f"*/{interval_days}")
+    else:
+        trigger = CronTrigger(hour=hour, minute=minute)
+
     job = scheduler.get_job(job_id)
     if job:
-        job.reschedule(trigger="interval", hours=interval)
+        job.reschedule(trigger=trigger)
     else:
-        # The coroutine is scheduled directly (rather than via
-        # asyncio.create_task) so the loop keeps a strong reference to it and
-        # max_instances can prevent overlapping sends.
         scheduler.add_job(
             partial(_do_send, user_id),
-            "interval",
-            hours=interval,
+            trigger=trigger,
             id=job_id,
             replace_existing=True,
             max_instances=1,

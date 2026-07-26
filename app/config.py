@@ -76,6 +76,7 @@ class Config:
         # --- Rate limits ---
         self.test_email_limit = _env_int("TEST_EMAIL_LIMIT_PER_HOUR", 5)
         self.login_limit = _env_int("LOGIN_LIMIT_PER_HOUR", 20)
+        self.quick_add_limit = _env_int("QUICK_ADD_LIMIT_PER_HOUR", 100)
 
         self.session_secret = self._resolve_session_secret()
         self.cookie_secure = _env_bool("COOKIE_SECURE", self._default_cookie_secure())

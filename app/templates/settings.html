@@ -81,6 +81,13 @@
                 <input type="text" id="email_subject" name="email_subject"
                        value="{{ settings.email_subject }}" maxlength="255">
             </div>
+            <div>
+                <label for="email_body_template">Email Body Template</label>
+                <textarea id="email_body_template" name="email_body_template"
+                          maxlength="16384" rows="10"
+                          placeholder="Available: {subject}, {bookmarks_list}">{{ settings.email_body_template }}</textarea>
+                <small class="hint">Use <code>{subject}</code> for the email subject and <code>{bookmarks_list}</code> where the links should appear.</small>
+            </div>
         </fieldset>
 
         <fieldset>
@@ -97,6 +104,19 @@
                            value="{{ settings.schedule_interval_hours }}" min="1" max="8760" step="1">
                 </div>
             </div>
+            <div class="form-row">
+                <div>
+                    <label for="schedule_hour">Send Time (hour, UTC)</label>
+                    <input type="number" id="schedule_hour" name="schedule_hour"
+                           value="{{ settings.schedule_hour }}" min="0" max="23">
+                </div>
+                <div>
+                    <label for="schedule_minute">Send Time (minute)</label>
+                    <input type="number" id="schedule_minute" name="schedule_minute"
+                           value="{{ settings.schedule_minute }}" min="0" max="59">
+                </div>
+            </div>
+            <small class="hint">The interval is rounded to the nearest day for scheduling. For example, 24 hours = daily, 48 hours = every other day.</small>
         </fieldset>
 
         <div class="btn-row">
@@ -105,6 +125,33 @@
                     data-csrf="{{ csrf_token }}">Send Test Email</button>
         </div>
     </form>
+</div>
+
+<div class="card">
+    <h2>API Access</h2>
+    <p>Use this API key with Apple Shortcuts or other automation tools to submit bookmarks.</p>
+    <div class="form-row">
+        <div style="flex: 1;">
+            <label for="api_key_display">API Key</label>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <input type="text" id="api_key_display" readonly
+                       value="{% if settings.api_key_set %}•••••••••••••••••••••••••••••••••••••••••••••••••••{% else %}No key set — click Generate below{% endif %}"
+                       style="font-family: monospace; flex: 1;">
+                <button type="button" id="copy-api-key" class="btn-secondary btn-sm" hidden>Copy</button>
+            </div>
+            <small class="hint">
+                {% if settings.api_key_set %}
+                    A key is stored (shown only once when generated). Send it in the <code>X-API-Key</code> header to <code>POST /api/quick-add</code>.
+                {% else %}
+                    No key set yet. Click Generate to create one — it will be shown only once.
+                {% endif %}
+            </small>
+        </div>
+    </div>
+    <div class="btn-row" style="margin-top: 0.5rem;">
+        <button type="button" id="regenerate-api-key" class="btn-secondary btn-sm"
+                data-csrf="{{ csrf_token }}">{{ "Regenerate" if settings.api_key_set else "Generate" }} API Key</button>
+    </div>
 </div>
 
 <script src="/static/settings.js"></script>

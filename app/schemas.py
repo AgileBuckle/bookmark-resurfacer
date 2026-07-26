@@ -63,8 +63,11 @@ class EmailSettings(BaseModel):
     email_from: str = Field(default="", max_length=320)
     email_to: str = Field(default="", max_length=320)
     email_subject: str = Field(default="Your Bookmarks to Revisit", max_length=255)
+    email_body_template: str = Field(default="", max_length=16384)
     links_per_email: int = Field(default=5, ge=1, le=50)
     schedule_interval_hours: int = Field(default=24, ge=1, le=8760)
+    schedule_hour: int = Field(default=9, ge=0, le=23)
+    schedule_minute: int = Field(default=0, ge=0, le=59)
 
     @field_validator("smtp_host", "smtp_username", "email_subject")
     @classmethod
@@ -90,6 +93,9 @@ class EmailSettingsOut(BaseModel):
     email_from: str
     email_to: str
     email_subject: str
+    email_body_template: str
     links_per_email: int
     schedule_interval_hours: int
+    schedule_hour: int
+    schedule_minute: int
     smtp_password_set: bool

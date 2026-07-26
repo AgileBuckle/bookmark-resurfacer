@@ -8,8 +8,8 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div>
             <label for="url">URL *</label>
-            <input type="url" id="url" name="url" required maxlength="2048"
-                   pattern="https?://.+" placeholder="https://example.com">
+            <input type="text" id="url" name="url" required maxlength="2048"
+                   inputmode="url" placeholder="https://example.com or example.com">
         </div>
         <div>
             <label for="title">Title</label>
@@ -79,8 +79,8 @@
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <div>
                         <label for="edit-url-{{ bm.id }}">URL</label>
-                        <input type="url" id="edit-url-{{ bm.id }}" name="url" value="{{ bm.url }}"
-                               required maxlength="2048" pattern="https?://.+">
+                        <input type="text" id="edit-url-{{ bm.id }}" name="url" value="{{ bm.url }}"
+                               required maxlength="2048" inputmode="url">
                     </div>
                     <div>
                         <label for="edit-title-{{ bm.id }}">Title</label>

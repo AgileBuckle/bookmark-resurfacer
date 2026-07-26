@@ -22,38 +22,42 @@ def build_email_body(bookmarks: list[Bookmark], settings: dict) -> str:
     Every interpolated value is HTML-escaped and every link target is checked
     to be http(s). Bookmark fields are attacker-controllable (via the API), so
     unescaped interpolation here would mean HTML/script injection into the
-    recipient's mailbox and `javascript:` links in the message body.
+    recipient's mailbox and ``javascript:`` links in the message body.
     """
     subject = escape_html(
         sanitize_header(settings.get("email_subject") or "Your Bookmarks to Revisit")
     )
 
-    lines = ["<html><body>"]
-    lines.append(f"<h2>{subject}</h2>")
-    lines.append("<p>Here are some bookmarks you saved — worth another look:</p>")
-    lines.append("<ul>")
-
+    bookmark_items = []
     for bm in bookmarks:
         title = escape_html(bm.title or bm.url)
-        lines.append("<li>")
+        parts = []
         if is_safe_url(bm.url):
-            lines.append(
+            parts.append(
                 f'<a href="{escape_html(bm.url)}" rel="noopener noreferrer">'
                 f"<strong>{title}</strong></a>"
             )
         else:
-            # Unsafe scheme: show the text, never make it clickable.
-            lines.append(f"<strong>{title}</strong>")
+            parts.append(f"<strong>{title}</strong>")
         if bm.description:
-            lines.append(f"<br/><em>{escape_html(bm.description)}</em>")
+            parts.append(f"<br/><em>{escape_html(bm.description)}</em>")
         if bm.tags:
-            lines.append(f"<br/><small>Tags: {escape_html(bm.tags)}</small>")
-        lines.append("</li>")
+            parts.append(f"<br/><small>Tags: {escape_html(bm.tags)}</small>")
+        bookmark_items.append(f"<li>{''.join(parts)}</li>")
 
-    lines.append("</ul>")
-    lines.append("<p><em>— Bookmark Resurfacer</em></p>")
-    lines.append("</body></html>")
-    return "".join(lines)
+    bookmarks_html = "\n".join(bookmark_items)
+    template = settings.get("email_body_template") or ""
+    if not template.strip():
+        template = (
+            "<h2>{subject}</h2>\n"
+            "<p>Here are some bookmarks you saved — worth another look:</p>\n"
+            "<ul>\n"
+            "{bookmarks_list}\n"
+            "</ul>\n"
+            "<p><em>— Bookmark Resurfacer</em></p>"
+        )
+    body = template.replace("{subject}", subject).replace("{bookmarks_list}", bookmarks_html)
+    return f"<html><body>{body}</body></html>"
 
 
 async def send_email_for_user(db: Session, user_id: str) -> tuple[bool, str | None]:
